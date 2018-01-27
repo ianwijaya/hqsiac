@@ -1,0 +1,143 @@
+    - name: provision BIG-IP
+      bigip_provision:
+        module: "{{ item }}"
+        level: nominal
+        state: present
+      with_items:
+        - asm
+        - ltm
+    - name: wait for F5 WAAP to be ready
+      bigip_wait:
+         timeout: 600
+         sleep: 2
+         delay : 5
+    - name: configure self ip
+      bigip_selfip:
+        name: 'self_1nic'
+        address: '{{ f5_self_addr }}'
+        netmask: '255.255.255.0'
+        vlan: 'internal'
+        state: present
+    - name: set allow_service default to self_1nic intf
+      bigip_command:
+         commands: tmsh modify net self self_1nic allow-service default
+    - name: Create static route with gateway address
+      bigip_command:
+        commands: "create net route default gw {{ svr_subnet_gw }}"
+    - name: Set the DNS settings on the BIG-IP
+      bigip_device_dns:
+        name_servers:
+         - 8.8.8.8
+         - 4.2.2.2
+    - name: Set NTP server
+      bigip_device_ntp:
+        ntp_servers:
+          - time.nist.gov
+        timezone: "{{ tzname }}"
+    - name: create app monitor for hackazon
+      bigip_monitor_http:
+        name: hackazon_http_monitor
+        state: present
+        send: "GET / HTTP/1.1\\r\\nhost: {{ server_name }}\\r\\n\\r\\n"
+        receive: "200 OK"
+    - name: create hackazon svr pool
+      bigip_pool:
+        name: pool_hackazon
+        state: present
+        lb_method: "fastest-app-response"
+        monitor_type: and_list
+        monitors: hackazon_http_monitor
+    - name: add member to pool_hackazon
+      bigip_pool_member:
+        pool: pool_hackazon
+        host: "{{ item }}"
+        port: 80
+        state: 'present'
+      with_items:
+        - "{{ ws_host }}"
+    - name: enable insert x-forwarded-for
+      bigip_command:
+        commands: modify ltm profile http http insert-xforwarded-for enabled
+    - name: create asm policy
+      bigip_asm_policy:
+        name: hackazon_waap_policy
+        file: "templates/f5waap/hackazon_waap_policy.xml"
+        active: yes
+        state: present
+    - name: create l7 policy
+      bigip_policy:
+        name: hackazon_l7_policy
+        state: present
+    - name: Add WAAP rule to hackazon_l7_policy
+      bigip_policy_rule:
+         name: activate_waap_rule
+         policy: hackazon_l7_policy
+         actions:
+          - type: enable
+            asm_policy: hackazon_waap_policy
+         conditions:
+          - type: all_traffic
+         state: present
+    - name: create hackazon HTTP REDIRECT VS
+      bigip_virtual_server:
+        name: vs_hackazon_redir_http
+        destination: '{{ f5_self_addr }}'
+        port: 80
+        description: Hackazon redirect virtual server
+        all_profiles:
+          - tcp
+          - http
+        all_rules:
+          - _sys_https_redirect
+    - name: create security logging profile
+      bigip_command:
+        commands: 'create security log profile hackazon_log_profile application add { app { filter add { request-type { values add { illegal } } search-all {} } format { field-delimiter \"\#\" fields { ip_client geo_location ip_address_intelligence src_port dest_ip dest_port protocol method uri x_forwarded_for_header_value request_status support_id session_id username violations violation_rating attack_type query_string policy_name sig_ids sig_names sig_set_names severity request } } local-storage disabled logic-operation and remote-storage remote servers add { {{ elk_host }}:5000 {} } } }'
+      ignore_errors: no
+    - name: create hackazon VS
+      bigip_virtual_server:
+        name: vs_hackazon_https
+        destination: '{{ f5_self_addr }}'
+        port: 443
+        pool: pool_hackazon
+        snat: Automap
+        description: Hackazon virtual server
+        all_profiles:
+          - tcp
+          - http
+          - clientssl
+          - websecurity
+        all_policies:
+          - hackazon_l7_policy
+    - name: assign security logging profile to VS
+      bigip_command:
+        commands: 'modify ltm virtual vs_hackazon_https security-log-profiles replace-all-with { hackazon_log_profile Log\ illegal\ requests }'
+    - name: create elk svr pool
+      bigip_pool:
+        name: pool_elk
+        state: present
+        lb_method: "fastest-app-response"
+    - name: add member to pool_hackazon
+      bigip_pool_member:
+        pool: pool_elk
+        host: "{{ elk_host }}"
+        port: 5601
+        state: 'present'
+    - name: Add the auth irules for elk
+      bigip_irule:
+         content: "{{ lookup('template', 'templates/f5waap/irules-auth-elk.tcl') }}"
+         module: ltm
+         name: irules_auth_elk
+    - name: create elk vs
+      bigip_virtual_server:
+        name: vs_elk_https
+        destination: '{{ f5_self_addr }}'
+        port: 5601
+        pool: pool_elk
+        snat: Automap
+        description: ELK virtual server
+        all_profiles:
+          - tcp
+          - http
+          - clientssl
+        all_rules:
+          - irules_auth_elk

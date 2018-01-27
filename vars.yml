@@ -1,0 +1,37 @@
+---
+#web server fqdn, you have to access the app using this name (not IP)
+server_name: myhackazon.ianwijaya.com
+#mysql info
+db_name: hackazon
+mysql_user: hackazon
+mysql_password: default
+
+#git only, this repo already contains watermark.php. if you use other repo, pls disables 'image_watermark'
+hackazon_repo: https://github.com/ianwijaya/hackazon
+#watermark all products images. used for load balancing POC with multiple web instance
+image_watermark: 'yes'
+
+#AZURE Configuration#
+#pls use non-production resource_group (namespace). nuke.yml will delete all resource under this RG.
+namespace: autodemo
+azure_location: southeastasia
+# install db on web server machine ? 'no' means using separate db svr
+local_db: 'no'
+#where desired_web_instance > 1 and local_db = yes, DB will be deployed on the first web instance.
+desired_web_instance: 2
+virtual_network: 10.10.40.0/23
+svr_subnet: 10.10.40.0/24
+ssh_key: 'ssh-rsa AAAAB3NzaCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXQxD7m1YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYADrBohU7I5d8qhDmZM8rIFOlRGGKZjua5iKZPbpDzwNCRBEMZgOW/sR1eReqOYhJrXLtpBWUCGApQvqnFpAiVzOi1ZkzBXNv7EojBygOZBX14baxdnZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZNFYAYWaZZ ansible@master'
+admin_username: ansible
+admin_password: veryDirtySecret! #use strong password, 12 char, contain special char and capital
+#pick a globally unique account, all with lower case and no special character
+storage_account: veryuniqueaccount
+owner: 'Owner'
+
+#F5 WAAP configurations
+f5_self_addr: 10.10.40.245
+svr_subnet_gw: 10.10.40.1
+timezone: 'GMT+7'
+tzname: 'Asia/Jakarta'
+f5_sw_version: "13.0.0300"
+f5_instance_name: 'f5waap'

@@ -1,0 +1,26 @@
+  - name: create Resource Group
+    azure_rm_resourcegroup:
+      name: '{{ namespace }}'
+      location: '{{ azure_location }}'
+      state: present
+      profile: 'default'
+      tags:
+         owner: '{{ owner }}'
+  - name: Create Virtual Network
+    azure_rm_virtualnetwork:
+      resource_group: '{{ namespace }}'
+      name: '{{ namespace }}_vn'
+      address_prefixes: '{{ virtual_network }}'
+
+  - name: Add Subnet
+    azure_rm_subnet:
+      resource_group: '{{ namespace }}'
+      virtual_network: '{{ namespace }}_vn'
+      name: '{{ namespace }}_subnet'
+      address_prefix: '{{ svr_subnet }}'
+
+  - name: create storage account
+    azure_rm_storageaccount:
+       resource_group: '{{ namespace }}'
+       name:  '{{ storage_account }}'
+       account_type: Standard_LRS

@@ -1,0 +1,38 @@
+- hosts: localhost
+  gather_facts: no
+  strategy: free
+  vars_files:
+    - vars.yml
+  tasks:
+    - include_tasks: provisioning/azure/azure-web-res-creation.yml
+    - name: set target host
+      set_fact:
+        target_host: 'Type_{{ namespace }}-websvr'
+    - name: set username
+      set_fact:
+        username: '{{ admin_username }}'
+    - meta: refresh_inventory
+
+
+- hosts: "{{ hostvars['localhost']['target_host'] }}"
+  remote_user: "{{ hostvars['localhost']['username'] }}"
+  become: yes
+  become_method: sudo
+  connection: ssh
+  gather_facts: no
+  strategy: free
+  vars_files:
+    - vars.yml
+  tasks:
+    - name: Wait for dbsvr
+      wait_for:
+          path: '/var/tmp/azure-{{namespace}}-db.ip'
+          state: present
+          msg: Timeout to find dbsvr ip
+          timeout: 600
+      when: local_db=='no'
+      delegate_to: localhost
+    - set_fact: #override vars_files variables only for Azure deployment.
+        mysql_host: "{{lookup('file', '/var/tmp/azure-'+namespace+'-db.ip') }}"
+      when: local_db=='no'
+    - include_tasks: configuration/hackazon-websvr.yml

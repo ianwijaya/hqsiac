@@ -1,0 +1,47 @@
+---
+- hosts: 'localhost'
+  gather_facts: no
+  vars_files:
+    - vars.yml
+  vars:
+    - svr: ['web','waap']
+  tasks:
+    - name: create environment
+      include_tasks: provisioning/azure/azure-env-res-creation.yml
+    - name: add db to resources list
+      set_fact:
+        svr: "['db'] + {{ svr }}"
+      when: local_db=='no'
+    - name: Create resources
+      shell: "ansible-playbook -i ./inventory/azure_rm.py site-{{ item }}.yml"
+      async: 10000
+      poll: 0
+      with_items:
+        - "{{ svr }}"
+      register: playlogs
+    - name: Wait all resources creation to complete
+      async_status: jid={{ playlogs.results[item.0].ansible_job_id }}
+      register: job_result
+      until: job_result.finished
+      retries: 10000
+      with_indexed_items:
+        - "{{ svr }}"
+    - name: Get WAAP address
+      set_fact: #override vars_files variables only for Azure deployment.
+        f5_host: "{{ lookup('file', '/var/tmp/azure-'+namespace+'-waap.ip' )  }}"
+    - name: Cleaning UP
+      file:
+         path: "{{ item }}"
+         state: absent
+      with_items:
+        - '/var/tmp/azure-{{namespace}}-web.ip'
+        - '/var/tmp/azure-{{namespace}}-elk.ip'
+        - '/var/tmp/azure-{{namespace}}-waap.ip'
+        - '/var/tmp/azure-{{namespace}}-db.ip'
+    - debug:
+       msg:
+        - "Playbook is complete"
+        - "Please add '{{ f5_host }} {{ server_name }}' to your hostfile/DNS"
+        - "Hackazon App: https://{{ server_name }}"
+        - "F5 WAAP GUI: https://{{ server_name }}:8443"
+        - "Kibana GUI: https://{{ server_name }}:5601"

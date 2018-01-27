@@ -1,0 +1,127 @@
+--- #deploy elk server
+  - name: set timezone
+    timezone:
+      name: '{{ tzname }}'
+  - name: uninstall some bins
+    apt:
+      name: "{{ item }}"
+      state: absent
+    with_items:
+      - runit
+      - git-daemon-run
+  - name: install packages
+    apt:
+      name: "{{ item }}"
+      update_cache: yes
+      state: present
+    with_items:
+      - software-properties-common
+      - apt-transport-https
+      - wget
+      - git-all
+  - name: add java JDK repository
+    apt_repository:
+      repo: 'ppa:webupd8team/java'
+  - name: Accept Oracle license
+    debconf:
+      name: 'oracle-java8-installer'
+      question: 'shared/accepted-oracle-license-v1-1'
+      value: 'true'
+      vtype: 'select'
+  - name: install JDK
+    apt:
+      update_cache: yes
+      name: oracle-java8-installer
+      state: present
+
+  - name: install elastic repo gpg key
+    shell: 'wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -'
+    args:
+      warn: false
+  - name: Add elastic repo
+    shell: 'echo "deb https://artifacts.elastic.co/packages/6.x/apt stable main" > /etc/apt/sources.list.d/elastic-6.x.list'
+
+  - name: install ELK
+    apt:
+      name: "{{ item }}"
+      update_cache: yes
+      state: present
+    with_items:
+      - elasticsearch
+      - logstash
+      - kibana
+  - name: service_handler
+    service:
+      name: "{{ item }}"
+      enabled: yes
+      state: restarted
+    with_items:
+      - elasticsearch
+      - kibana
+      - logstash
+
+  - name: Download and extract geolite IP
+    unarchive:
+      src: http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz
+      dest: /etc/logstash/
+      remote_src: yes
+      owner: root
+      extra_opts: [--strip-components=1]
+  - name: Download logstash configuration
+    get_url:
+      url: https://raw.githubusercontent.com/ianwijaya/visualfae/master/50-asm-logstash.conf
+      dest: /etc/logstash/conf.d/
+  - name: sleep for 5 seconds and continue with play
+    wait_for: timeout=5
+  - name: Download ES mapping from repository
+    get_url:
+      url: https://raw.githubusercontent.com/ianwijaya/visualfae/master/esv6_template-asm-index.json
+      dest: /var/tmp/es_template-asm-index.json
+
+  - name: Update logstash template
+    shell: 'curl -XPUT http://localhost:9200/_template/asm-index_template?pretty -d @/var/tmp/es_template-asm-index.json -H "Content-type: application/json"'
+    args:
+      warn: false
+  - name: Create Kibana index pattern
+    uri:
+      url: "http://localhost:5601/api/saved_objects/index-pattern/asm-index"
+      method: POST
+      body: '{"attributes": {"title": "asm-index", "timeFieldName": "@timestamp"}}'
+      body_format: json
+      headers:
+        kbn-xsrf: az-elk-waap
+      status_code: [ 200, 409 ]
+  - name: Make asm-index as default index
+    uri:
+      url: "http://localhost:5601/api/kibana/settings/defaultIndex"
+      method: POST
+      body: '{"value": "asm-index"}'
+      body_format: json
+      headers:
+        kbn-xsrf: az-elk-waap
+  - name: load dashboard and visual templates
+    set_fact:
+       dvjson: "{{ lookup ('url', 'https://raw.githubusercontent.com/ianwijaya/visualfae/master/sample-dashboard_and_visualizations.json',split_lines=False) }}"
+  - name: restore dashboard
+    uri:
+      url: "http://localhost:5601/api/saved_objects/{{ item._type }}/{{ item._id }}?overwrite=true"
+      method: POST
+      body: '{ "attributes" : {{ item._source }}}'
+      body_format: json
+      headers:
+        kbn-xsrf: az-elk-waap
+    with_items: "{{ dvjson }}"
+  - name: ask Kibana to listen on network
+    lineinfile:
+      path: /etc/kibana/kibana.yml
+      regexp: 'server\.host:'
+      line: 'server.host: 0.0.0.0'
+  - name: service_handler
+    service:
+      name: "{{ item }}"
+      enabled: yes
+      state: restarted
+    with_items:
+      - elasticsearch
+      - kibana
+      - logstash

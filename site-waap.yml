@@ -1,0 +1,38 @@
+- hosts: localhost
+  gather_facts: no
+  strategy: free
+  vars_files:
+    - vars.yml
+  tasks:
+    - include_tasks: provisioning/azure/azure-waap-res-creation.yml
+    - name: set target host
+      set_fact:
+        target_host: 'Type_{{ namespace }}-waasvr'
+    - name: set username
+      set_fact:
+        username: '{{ admin_username }}'
+    - meta: refresh_inventory
+    - name: install f5-sdk
+      local_action: shell pip install f5-sdk bigsuds netaddr
+      become: yes
+      become_method: sudo
+    - name: Wait for IP information
+      wait_for:
+        path: '{{ item }}'
+        state: present
+        msg: Timeout to find websvr ip
+        timeout: 600
+      with_items:
+        - '/var/tmp/azure-{{namespace}}-web.ip'
+        - '/var/tmp/azure-{{namespace}}-elk.ip'
+    - set_fact: #override vars_files variables only for Azure deployment.
+        ws_host: "{{lookup('file', '/var/tmp/azure-'+namespace+'-web.ip' ) }}"
+        f5_host: "{{lookup('file', '/var/tmp/azure-'+namespace+'-waap.ip' ) }}"
+        elk_host: "{{lookup('file', '/var/tmp/azure-'+namespace+'-elk.ip' ) }}"
+    - include_tasks: configuration/hackazon-f5waap.yml
+      environment:
+        F5_USER: '{{ admin_username }}'
+        F5_PASSWORD: '{{ admin_password }}'
+        F5_SERVER:  "{{ f5_host }}"
+        F5_SERVER_PORT: '8443'
+        F5_VALIDATE_CERTS: 'no'

@@ -1,0 +1,79 @@
+  - name: deploy F5 WAAP thru ARM template
+    azure_rm_deployment:
+       state: present
+       resource_group_name: '{{ namespace }}'
+       location: '{{ azure_location }}'
+       template_link: https://raw.githubusercontent.com/F5Networks/f5-azure-arm-templates/master/supported/standalone/1nic/existing_stack/PAYG/azuredeploy.json
+       parameters:
+          adminUsername:
+              value: "{{ admin_username }}"
+          adminPassword:
+              value: "{{ admin_password }}"
+          dnsLabel:
+              value: '{{ namespace }}-{{ f5_instance_name }}'
+          instanceName:
+              value: '{{ namespace }}-{{ f5_instance_name }}'
+          instanceType:
+              value: "Standard_D2_v2"
+          imageName:
+              value: "Best"
+          bigIpVersion:
+              value: "{{ f5_sw_version }}"
+          licensedBandwidth:
+              value: "25m"
+          vnetName:
+              value: "{{ namespace }}_vn"
+          vnetResourceGroupName:
+              value: "{{ namespace }}"
+          mgmtSubnetName:
+              value: "{{ namespace }}_subnet"
+          mgmtIpAddress:
+              value: "{{ f5_self_addr }}"
+          avSetChoice:
+              value: "CREATE_NEW"
+          ntpServer:
+              value: "0.pool.ntp.org"
+          timeZone:
+              value: "{{ timezone }}"
+          restrictedSrcAddress:
+              value: "*"
+          tagValues:
+              value:
+                 Name: '{{ namespace }}-{{ f5_instance_name }}'
+                 Type: 'f5'
+                 application: 'APP'
+                 cost: 'COST'
+                 environment: 'ENV'
+                 group: 'GROUP'
+                 owner: 'OWNER'
+          allowUsageAnalytics:
+              value: "Yes"
+    register: output
+  - name: write waap addr to a file
+    copy:
+      content: "{{ output.deployment.instances[0].ips[0].public_ip }}"
+      dest: "/var/tmp/azure-{{namespace}}-waap.ip"
+  - name: Add 80, 443, and 5601 rules to F5 WAAP security group
+    become: no
+    azure_rm_securitygroup:
+      resource_group: '{{ namespace }}'
+      name: "{{namespace}}-{{ f5_instance_name }}-mgmt-nsg"
+      rules:
+       - name: 'http'
+         protocol: Tcp
+         destination_port_range: '80'
+         access: Allow
+         direction: Inbound
+         priority: '103'
+       - name: 'https'
+         protocol: Tcp
+         destination_port_range: '443'
+         access: Allow
+         direction: Inbound
+         priority: '104'
+       - name: 'elk'
+         protocol: Tcp
+         destination_port_range: '5601'
+         access: Allow
+         direction: Inbound
+         priority: '105'

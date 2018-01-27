@@ -1,0 +1,31 @@
+- hosts: localhost
+  gather_facts: no
+  strategy: free
+  vars_files:
+    - vars.yml
+  tasks:
+    - include_tasks: provisioning/azure/azure-db-res-creation.yml
+    - name: set target host [for local_db]
+      set_fact:
+        target_host: 'Name_{{ namespace }}-websvr1'
+      when: local_db=='yes'
+    - name: set target host
+      set_fact:
+        target_host: 'Type_{{ namespace }}-dbsvr'
+      when: local_db=='no'
+    - name: set username
+      set_fact:
+        username: '{{ admin_username }}'
+    - meta: refresh_inventory
+
+- hosts: "{{ hostvars['localhost']['target_host'] }}"
+  remote_user: "{{ hostvars['localhost']['username'] }}"
+  become: yes
+  become_method: sudo
+  connection: ssh
+  gather_facts: no
+  strategy: free
+  vars_files:
+    - vars.yml
+  tasks:
+    - include_tasks: configuration/hackazon-dbsvr.yml

@@ -1,0 +1,62 @@
+--- #deploy db server
+  - name: set timezone
+    timezone:
+      name: '{{ tzname }}'
+  - name: set mysql passwd
+    debconf:
+      name: 'mysql-server'
+      question: 'mysql-server/root_password'
+      value: '{{ mysql_password | quote }}'
+      vtype: 'password'
+  - name: confirm mysql passwd
+    debconf:
+      name: 'mysql-server'
+      question: 'mysql-server/root_password_again'
+      value: '{{ mysql_password | quote }}'
+      vtype: 'password'
+  - name: install mysql packages
+    apt:
+      name: "{{ item }}"
+      update_cache: yes
+      state: present
+      force: yes
+    with_items:
+      - mysql-server
+      - mysql-client
+      - python-mysqldb
+  - name: listen on all addresses
+    lineinfile:
+      path: /etc/mysql/mysql.conf.d/mysqld.cnf
+      regexp: '^bind-address'
+      line: 'bind-address  = *'
+  - name: crate hackazon db
+    mysql_db:
+      name: '{{ db_name }}'
+      state: present
+      login_user: root
+      login_password: '{{ mysql_password | quote }}'
+  - name: create hackazon user and grant access to hackazon db
+    mysql_user:
+      name: '{{ mysql_user }}'
+      password: '{{ mysql_password | quote }}'
+      priv: "{{ db_name }}.*:ALL"
+      host: '%'
+      login_user: root
+      login_password: '{{ mysql_password | quote }}'
+      state: present
+  - name: Copy hackazon db dump
+    copy:
+      src: templates/mysql/hackazon.sql
+      dest: /var/tmp/
+  - name: restore database
+    mysql_db:
+      name: "{{ db_name }}"
+      state: import
+      target: /var/tmp/hackazon.sql
+      login_user: root
+      login_password: '{{ mysql_password | quote }}'
+  - name: service_handler
+    service:
+      name: mysql
+      enabled: yes
+      state: restarted

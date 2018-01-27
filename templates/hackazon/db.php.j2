@@ -1,0 +1,13 @@
+<?php
+return array (
+  'default' =>
+  array (
+    'user' => '{{ mysql_user }}',
+    'password' => '{{ mysql_password }}',
+    'driver' => 'PDOV',
+    'connection' => "mysql:host={{ mysql_host }};port=3306;dbname={{ db_name }}",
+    'db' => '{{ db_name }}',
+    'host' => '{{ mysql_host }}',
+    'port' => '3306',
+  ),
+);

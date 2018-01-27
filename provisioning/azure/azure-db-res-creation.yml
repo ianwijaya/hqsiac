@@ -1,0 +1,56 @@
+  - name: Create DB Svr Security Groups
+    azure_rm_securitygroup:
+      resource_group: '{{ namespace }}'
+      name: '{{ namespace }}_db_sg'
+      rules:
+       - name: 'ssh'
+         protocol: Tcp
+         destination_port_range: '22'
+         access: Allow
+         direction: Inbound
+         priority: '1001'
+       - name: 'mysql'
+         protocol: Tcp
+         source_address_prefix: '{{ svr_subnet }}'
+         destination_port_range: '3306'
+         access: Allow
+         direction: Inbound
+         priority: '1002'
+  - name: Create Public IP for Mgmt
+    azure_rm_publicipaddress:
+       resource_group: '{{ namespace }}'
+       allocation_method: Static
+       name: '{{ namespace }}_db_pub_ip'
+  - name: Create NIC
+    azure_rm_networkinterface:
+       resource_group: '{{ namespace }}'
+       name: '{{ namespace }}_db_nic_1'
+       virtual_network: '{{ namespace }}_vn'
+       subnet: '{{ namespace }}_subnet'
+       security_group: '{{ namespace }}_db_sg'
+       public_ip_name: '{{ namespace }}_db_pub_ip'
+  - name: Create DB VM
+    azure_rm_virtualmachine:
+       resource_group: '{{ namespace }}'
+       name: '{{ namespace }}-dbsvr'
+       vm_size: Basic_A0
+       admin_username: '{{ admin_username }}'
+       admin_password: '{{ admin_password }}'
+       storage_account: '{{ storage_account }}'
+       ssh_password_enabled: True
+       ssh_public_keys:
+        - path: '/home/{{ admin_username }}/.ssh/authorized_keys'
+          key_data: '{{ ssh_key }}'
+       network_interfaces: '{{ namespace }}_db_nic_1'
+       tags:
+          Type: '{{ namespace }}-dbsvr'
+       image:
+        offer: 'UbuntuServer'
+        publisher: 'Canonical'
+        sku: '16.04-LTS'
+        version: 'latest'
+    register: output
+  - name: write dbsvr addr to a file for inter-process play
+    copy:
+      content: "{{ output.ansible_facts.azure_vm.properties.networkProfile.networkInterfaces[0].properties.ipConfigurations[0].properties.privateIPAddress }}"
+      dest: "/var/tmp/azure-{{namespace}}-db.ip"

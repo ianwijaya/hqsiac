@@ -1,0 +1,65 @@
+--- #provision elk servers
+  - name: Create ELK Svr Security Groups
+    azure_rm_securitygroup:
+      resource_group: '{{ namespace }}'
+      name: '{{ namespace }}_elk_sg'
+      rules:
+       - name: 'ssh'
+         protocol: Tcp
+         destination_port_range: '22'
+         access: Allow
+         direction: Inbound
+         priority: '1001'
+       - name: 'log-listener'
+         protocol: '*'
+         source_address_prefix: '{{ svr_subnet }}'
+         destination_port_range: '5000'
+         access: Allow
+         direction: Inbound
+         priority: '1002'
+       - name: 'kibana'
+         protocol: Tcp
+         source_address_prefix: '{{ svr_subnet }}'
+         destination_port_range: '5601'
+         access: Allow
+         direction: Inbound
+         priority: '1003'
+  - name: Create public IP
+    azure_rm_publicipaddress:
+      resource_group: '{{ namespace }}'
+      allocation_method: Static
+      name: '{{ namespace }}_elk_pub_ip'
+  - name: Create NIC
+    azure_rm_networkinterface:
+       resource_group: '{{ namespace }}'
+       name: '{{ namespace }}_elk_nic'
+       virtual_network: '{{ namespace }}_vn'
+       subnet: '{{ namespace }}_subnet'
+       public_ip_name: '{{ namespace }}_elk_pub_ip'
+       security_group: '{{ namespace }}_elk_sg'
+  - name: Create ELK VM
+    azure_rm_virtualmachine:
+       resource_group: '{{ namespace }}'
+       name: '{{ namespace }}-elksvr'
+       vm_size: "Standard_D2_v3"
+       admin_username: '{{ admin_username }}'
+       admin_password: '{{ admin_password }}'
+       storage_account: '{{ storage_account }}'
+       ssh_password_enabled: True
+       short_hostname: 'az-elksvr'
+       ssh_public_keys:
+        - path: '/home/{{ admin_username }}/.ssh/authorized_keys'
+          key_data: '{{ ssh_key }}'
+       network_interfaces: '{{ namespace }}_elk_nic'
+       tags:
+          Type: '{{ namespace }}-elksvr'
+       image:
+        offer: 'UbuntuServer'
+        publisher: 'Canonical'
+        sku: '16.04-LTS'
+        version: 'latest'
+    register: output
+  - name: write elk addr to a file for inter-process play
+    copy:
+      content: "{{ output.ansible_facts.azure_vm.properties.networkProfile.networkInterfaces[0].properties.ipConfigurations[0].properties.privateIPAddress }}"
+      dest: "/var/tmp/azure-{{ namespace }}-elk.ip"

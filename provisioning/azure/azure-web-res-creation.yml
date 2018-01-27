@@ -1,0 +1,71 @@
+  - name: Create Web Svr Security Groups
+    azure_rm_securitygroup:
+      resource_group: '{{ namespace }}'
+      name: '{{ namespace }}_web_sg'
+      rules:
+       - name: 'ssh'
+         protocol: Tcp
+         destination_port_range: '22'
+         access: Allow
+         direction: Inbound
+         priority: '1001'
+       - name: 'web'
+         protocol: Tcp
+         destination_port_range: '80'
+         access: Allow
+         direction: Inbound
+         priority: '1002'
+       - name: 'ssl'
+         protocol: Tcp
+         destination_port_range: '443'
+         access: Allow
+         direction: Inbound
+         priority: '1003'
+  - name: Create public IP
+    azure_rm_publicipaddress:
+      resource_group: '{{ namespace }}'
+      allocation_method: Static
+      name: '{{ namespace }}_web_pub_ip_{{ item }}'
+    with_sequence: start=1 end={{ desired_web_instance }} stride=1
+
+  - name: Create NIC
+    azure_rm_networkinterface:
+       resource_group: '{{ namespace }}'
+       name: '{{ namespace }}_web_nic_{{ item }}'
+       virtual_network: '{{ namespace }}_vn'
+       subnet: '{{ namespace }}_subnet'
+       public_ip_name: '{{ namespace }}_web_pub_ip_{{ item }}'
+       security_group: '{{ namespace }}_web_sg'
+    with_sequence: start=1 end={{ desired_web_instance }} stride=1
+
+  - name: Create Web VM
+    azure_rm_virtualmachine:
+       resource_group: '{{ namespace }}'
+       name: '{{ namespace }}-websvr{{ item }}'
+       vm_size: Basic_A0
+       admin_username: '{{ admin_username }}'
+       admin_password: '{{ admin_password }}'
+       storage_account: '{{ storage_account }}'
+       ssh_password_enabled: True
+       short_hostname: 'az-websvr{{ item }}'
+       ssh_public_keys:
+        - path: '/home/{{ admin_username }}/.ssh/authorized_keys'
+          key_data: '{{ ssh_key }}'
+       network_interfaces: '{{ namespace }}_web_nic_{{ item }}'
+       tags:
+          Type: '{{ namespace }}-websvr'
+          Name: '{{ namespace }}-websvr{{ item }}'
+       image:
+        offer: 'UbuntuServer'
+        publisher: 'Canonical'
+        sku: '16.04-LTS'
+        version: 'latest'
+    register: "output"
+    with_sequence: start=1 end={{ desired_web_instance }} stride=1
+  - set_fact: ws_host=[]
+  - set_fact: ws_host="{{ ws_host }} + [ '{{ item.ansible_facts.azure_vm.properties.networkProfile.networkInterfaces[0].properties.ipConfigurations[0].properties.privateIPAddress }}' ]"
+    with_items: "{{ output.results }}"
+  - name: write websvr addr to a file for inter-process play
+    copy:
+      content: "{{ ws_host }}"
+      dest: "/var/tmp/azure-{{namespace}}-web.ip"

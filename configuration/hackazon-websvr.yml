@@ -1,0 +1,88 @@
+--- #deploy web server
+  - name: set timezone
+    timezone:
+      name: '{{ tzname }}'
+  - name: add php 5.6 repository
+    apt_repository:
+      repo: 'ppa:ondrej/php'
+  - name: install packages
+    apt:
+      name: "{{ item }}"
+      update_cache: yes
+      state: present
+    with_items:
+      - software-properties-common
+      - apache2
+      - php5.6
+      - php5.6-mysql
+      - php5.6-xml
+      - php5.6-bcmath
+      - php5.6-mbstring
+      - php5.6-imagick
+      - libapache2-mod-php5.6
+  - name: uninstall some bins
+    apt:
+      name: "{{ item }}"
+      state: absent
+    with_items:
+      - runit
+      - git-daemon-run
+  - name: install supporting bins
+    apt:
+      name: "{{ item }}"
+      state: present
+    with_items:
+      - git-all
+      - wget
+  - name: enable rewrite module
+    apache2_module:
+      state: present
+      name: rewrite
+  - name: clone hackazon from git
+    git:
+      repo: '{{ hackazon_repo }}'
+      dest: /var/www/hackazon
+      force: yes
+      recursive: no
+  - name: download Hackazon virtual host configuration
+    template:
+      src: templates/apache/010-hackazon.conf
+      dest: /etc/apache2/sites-available/010-hackazon.conf
+  - name: create symlink of virtual host configuration
+    file: src=/etc/apache2/sites-available/010-hackazon.conf  dest=/etc/apache2/sites-enabled/010-hackazon.conf state=link
+  - name: change owner of hackazon directory
+    file:
+      path: /var/www/hackazon
+      state: directory
+      owner: www-data
+      group: www-data
+      recurse: yes
+  - name: run php composer
+    shell: 'php composer.phar install -o --prefer-dist'
+    args:
+      chdir: '/var/www/hackazon'
+  - name: add db connection configuration (db.php)
+    template:
+      src: templates/hackazon/db.php.j2
+      dest: /var/www/hackazon/assets/config/db.php
+      owner: www-data
+      group: www-data
+  - name: add watermark htaccess configuration
+    template:
+      src: templates/apache/htaccess-wm.conf
+      dest: /var/www/hackazon/web/.htaccess
+      owner: www-data
+      group: www-data
+    when: image_watermark=='yes'
+  - name: add non watermark htaccess configuration
+    template:
+      src: templates/apache/htaccess-nowm.conf
+      dest: /var/www/hackazon/web/.htaccess
+      owner: www-data
+      group: www-data
+    when: image_watermark=='no'
+  - name: service_handler
+    service:
+      name: apache2
+      enabled: yes
+      state: restarted
