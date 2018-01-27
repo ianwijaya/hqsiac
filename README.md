@@ -1,5 +1,5 @@
 
-# Ansible Code for Deploying Hackazon Application and F5 WAAP in Multi-cloud Environments
+# Ansible Code for Deploying Hackazon Application and F5 WAAP in Multi-cloud Environment
 
 ## Intro
 This repo contains Ansible code that can be used to automatically provision and configure Hackazon secure setup in multi-cloud environment. The objective of this work is to show how vulnerable application (Hackazon) can be attacked and compromised as well as to show how we can immediately secure it using F5 Web Application and API protection.
@@ -8,8 +8,9 @@ This repo contains Ansible code that can be used to automatically provision and 
   ![Lab Topology](https://raw.githubusercontent.com/ianwijaya/hackazon-iac/master/README/lab-topology.png)
 
 ### Prerequisites
-You need 1 machine to act as Ansible control/mgmt node (this can be your computer or another server).
-***Management node***
+You need 1 machine to be provisoned as Ansible control/mgmt node (this can be your computer or another server).
+
+#### Management Node
 Operating system: Ubuntu-16.04
 
 - Install Ansible version 2.5.0
@@ -33,7 +34,7 @@ ssh-copy-id ansible@localhost
 host_key_checking = False
 forks= 20
 ```
-- Allow "ansible" to sudo without password to localhost:
+- Allow "ansible" to "sudo" without password:
 ```
 sudo visudo
 #then append this line:
@@ -71,11 +72,10 @@ tenant=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx
 subscription_id=xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxx
 ```
 
-Save it to "~/.azure/credentials" (it has to be in home directory, pls create if it doesn't exist).
-Refer to this url for more detail explanation:
+Save it to "~/.azure/credentials" (it has to be in home directory, pls create if it doesn't exist). Refer to this url for detail explanation:
 https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-create-service-principal-portal
 
-3. F5 WAAP items also need to be enabled for programmatic deployment. You need to acknowledge the subscription terms.
+3. F5 WAAP also need to be enabled for programmatic deployment. You need to acknowledge the subscription terms.
 To do this, search "F5" in the marketplace, choose "F5 BIG-IP ADC+SEC BEST 25M Hourly" and click the link "want to deploy programmatically ?" hit enable and save.  
 
 4. Edit vars.yml
@@ -85,13 +85,10 @@ cat .ssh/id_rsa.pub then copy the value to this var
 
 ***admin_username***
 change to desired username
-
 ***admin_password***
 give the username a password
-
 ***storage_account***
 must be unique ID (pick a unique string), all with lower case and no special character
-
 ***namespace***
 Please pick global unique name
 
