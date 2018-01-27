@@ -4,7 +4,7 @@
   vars_files:
     - vars.yml
   vars:
-    - svr: ['web','waap']
+    - svr: ['web','waap','elk']
   tasks:
     - name: create environment
       include_tasks: provisioning/azure/azure-env-res-creation.yml
