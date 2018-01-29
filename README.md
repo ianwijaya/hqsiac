@@ -1,8 +1,8 @@
 
-# Ansible Code for Deploying Hackazon Application and F5 WAAP in Multi-cloud Environment
+# Ansible Code for Deploying Hackazon and F5 WAAP in Multi-cloud Environment
 
 ## Intro
-This repo contains Ansible code that can be used to automatically provision and configure Hackazon secure setup in multi-cloud environment. The objective of this work is to show how vulnerable application (Hackazon) can be attacked and compromised as well as to show how we can immediately secure it using F5 Web Application and API protection.
+This repo contains Ansible code that can be used to automatically provision and configure Hackazon secure setup in multi-cloud environment. The objective of this work is to show how vulnerable application (Hackazon) can be attacked and compromised as well as to show how we can immediately secure it using F5 WAAP (Web Application and API protection) solution.
 
 ### Lab Topology
   ![Lab Topology](https://raw.githubusercontent.com/ianwijaya/hackazon-iac/master/README/lab-topology.png)
@@ -79,16 +79,20 @@ https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-cre
 To do this, search "F5" in the marketplace, choose "F5 BIG-IP ADC+SEC BEST 25M Hourly" and click the link "want to deploy programmatically ?" hit enable and save.  
 
 4. Edit vars.yml
-Open vars.yml, and change these parameters:
+Change these parameters
+
 ***ssh_key***
 cat .ssh/id_rsa.pub then copy the value to this var
 
 ***admin_username***
 change to desired username
+
 ***admin_password***
 give the username a password
+
 ***storage_account***
 must be unique ID (pick a unique string), all with lower case and no special character
+
 ***namespace***
 Please pick global unique name
 
